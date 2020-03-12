@@ -88,24 +88,25 @@ public:
     Breakout();
     ~Breakout(){};
     void render(sf::RenderWindow &window);
-    void move();
-    void tick();
+    void move(float elapsed);
+    void tick(float elapsed);
     void setDirection(Direction dir){this->dir = dir;}
+    Direction getDirection() {return dir;}
     void setScore(){score += 20;}
     void setLives(){lives--;}
     void lose() {gameover = true;}
-    void getGameStatus() {return gameover;}
+    bool getGameStatus() {return gameover;}
     sf::RectangleShape getBoard() {return board;}
 };
 
 Breakout::Breakout() {
-    board.setSize(sf::Vector2f(100.0f, 20.0f));
+    board.setSize(sf::Vector2f(150.0f, 20.0f));
 //    board.setOrigin(board.getSize().x / 2, board.getSize().y / 2);
     board.setPosition(600 - board.getSize().x / 2, 700);
     gameover = false;
     score = 0;
     lives = 3;
-    speed = 10;
+    speed = 15;
     setDirection(Direction::None);
 }
 
@@ -114,17 +115,17 @@ void Breakout::render(sf::RenderWindow &window) {
     window.draw(board);
 }
 
-void Breakout::move() {
+void Breakout::move(float elapsed) {
     if (dir == Direction::Left && board.getPosition().x >= 0)
-        board.setPosition(board.getPosition().x - speed, board.getPosition().y);
+        board.setPosition(board.getPosition().x - (speed * elapsed), board.getPosition().y);
     else if (dir == Direction::Right &&
              (board.getPosition().x + board.getSize().x) <= 1200)
-        board.setPosition(board.getPosition().x + speed, board.getPosition().y);
+        board.setPosition(board.getPosition().x + (speed * elapsed), board.getPosition().y);
 }
 
-void Breakout::tick() {
+void Breakout::tick(float elapsed) {
     if (dir == Direction::None) return;
-    move();
+    move(elapsed);
 }
 
 using BlockSet = std::vector<sf::RectangleShape>;
@@ -144,11 +145,13 @@ public:
     Board();
     ~Board(){}
     void Update();
+    void handleInput();
     void ballMovement();
     void render(sf::RenderWindow &window);
     void collision();
     sf::Time getElapsed() {return clock.getElapsedTime();}
     void restartClock() {elapsed += clock.restart().asSeconds();}
+    bool gameover() {return breakout.getGameStatus();}
 };
 
 void Board::initialBlock() {
@@ -171,16 +174,25 @@ Board::Board() : block(6, BlockSet(8)) {
     ball.setOrigin(ball.getRadius(), ball.getRadius());
     ball.setPosition(600, 700 - 50);
     blockNum = block.size() * block[0].size();
-    increment = sf::Vector2i(5, 10);
+    increment = sf::Vector2i(5, 5);
     clock.restart();
     elapsed = 0.0f;
 }
 
+void Board::handleInput() {
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))
+        breakout.setDirection(Direction::Left);
+    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
+        breakout.setDirection(Direction::Right);
+    else breakout.setDirection(Direction::None);
+}
+
 void Board::Update() {
+    handleInput();
     ballMovement();
+    breakout.tick(elapsed);
     float timestep = 1.0f / 10;
     if (elapsed >= timestep) {
-        breakout.tick();
         elapsed -= timestep;
     }
 }
@@ -190,8 +202,16 @@ void Board::ballMovement() {
     int blockSizeX = block.front().front().getSize().x;
     int blockSizeY = block.front().front().getSize().y;
     
+//    border collision
+    if (ball.getPosition().x - ball.getRadius() <= 0 ||
+        ball.getPosition().y - ball.getRadius() <= 0 ||
+        ball.getPosition().x + ball.getRadius() >= 1200) {
+        if (ball.getPosition().x - ball.getRadius() <= 0 ||
+            ball.getPosition().x + ball.getRadius() >= 1200) increment.x = -increment.x;
+        if (ball.getPosition().y - ball.getRadius() <= 0) increment.y = -increment.y;
+    }
 //    ball enters the block range
-    if (ball.getPosition().y - ball.getRadius() <= maxrangeY + blockSizeY) collision();
+    else if (ball.getPosition().y - ball.getRadius() <= maxrangeY + blockSizeY) collision();
 //    check if ball hit the board
     else {
         float testX = ball.getPosition().x, testY = ball.getPosition().y;
@@ -203,17 +223,26 @@ void Board::ballMovement() {
             breakout.getBoard().getSize().x;
         if (testY < breakout.getBoard().getPosition().y)
             testY = breakout.getBoard().getPosition().y;
+        else if (testY > breakout.getBoard().getPosition().y +
+                 breakout.getBoard().getSize().y)
+            testY = breakout.getBoard().getPosition().y +
+            breakout.getBoard().getSize().y;
         float distX = ball.getPosition().x - testX;
         float distY = ball.getPosition().y - testY;
         float distance = sqrt((distX * distX) + (distY * distY));
         if (distance <= ball.getRadius()) {
-            if (testX != ball.getPosition().x) increment.x = -increment.x;
-            increment.y = -increment.y;
+            if (testX != ball.getPosition().x &&
+                testY != ball.getPosition().y) {
+                increment.x = -increment.x;
+                increment.y = -increment.y;
+            }
+            else if (testX == ball.getPosition().x) increment.y = -increment.y;
+            else if (testY == ball.getPosition().y) increment.x = -increment.x;
         }
     }
-    float curElapsed = elapsed;
-    ball.setPosition(ball.getPosition().x + (increment.x * curElapsed),
-                     ball.getPosition().y + (increment.y * curElapsed));
+    ball.setPosition(ball.getPosition().x + (increment.x * elapsed),
+                     ball.getPosition().y + (increment.y * elapsed));
+    if (ball.getPosition().y - ball.getRadius() >= 800) breakout.lose();
 }
 
 
@@ -259,59 +288,20 @@ void Board::collision() {
                 else if (testX == ball.getPosition().x) increment.y = -increment.y;
 //                ball hit from the left or right to the block
                 else if (testY == ball.getPosition().y) increment.x = -increment.x;
+                return;
             }
         }
     }
 }
 
-int main(int argc, char const** argv)
-{
+int main(int argc, char const** argv) {
     Window m_window("Hello World", sf::Vector2u(1200, 800));
     Board world;
-    while(!m_window.getCloseWindow()) {
+    while(!world.gameover() && !m_window.getCloseWindow()) {
         m_window.Update();
         m_window.clearDraw();
         world.Update();
         world.render(*m_window.getWindow());
-//        center vertical line
-        sf::VertexArray vert(sf::Lines, 2);
-        vert[0].position = sf::Vector2f(600, 0);
-        vert[0].color = sf::Color::Green;
-        vert[1].position = sf::Vector2f(600, 800);
-        vert[1].color = sf::Color::Green;
-        
-//        center horizontal line
-        sf::VertexArray hori(sf::Lines, 2);
-        hori[0].position = sf::Vector2f(0, 400);
-        hori[0].color = sf::Color::Green;
-        hori[1].position = sf::Vector2f(1200, 400);
-        hori[1].color = sf::Color::Green;
-        
-//        board horizontal line
-        sf::VertexArray boardHori(sf::Lines, 2);
-        boardHori[0].position = sf::Vector2f(0, 700);
-        boardHori[0].color = sf::Color::Green;
-        boardHori[1].position = sf::Vector2f(1200, 700);
-        boardHori[1].color = sf::Color::Green;
-        
-//        board
-//        sf::RectangleShape square;
-//        square.setSize(sf::Vector2f(120.0f, 20.0f));
-//        square.setFillColor(sf::Color::Red);
-////        square.setOrigin(square.getSize().x / 2, square.getSize().y / 2);
-//        square.setPosition(600.0f - square.getSize().x / 2, 700.0f);
-        
-//        ball
-//        sf::CircleShape circle(12);
-//        circle.setFillColor(sf::Color::White);
-//        circle.setOrigin(circle.getRadius(), circle.getRadius());
-//        circle.setPosition(600, 20);
-//        world.render(*m_window.getWindow());
-//        m_window.draw(circle);
-        m_window.draw(vert);
-        m_window.draw(hori);
-////        m_window.draw(boardHori);
-//        m_window.draw(square);
         m_window.display();
         m_window.clearDraw();
         world.restartClock();
