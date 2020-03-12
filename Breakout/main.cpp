@@ -116,6 +116,7 @@ void Breakout::render(sf::RenderWindow &window) {
 }
 
 void Breakout::move(float elapsed) {
+//    TO DO: Need to check if the board will hit the ball.
     if (dir == Direction::Left && board.getPosition().x >= 0)
         board.setPosition(board.getPosition().x - (speed * elapsed), board.getPosition().y);
     else if (dir == Direction::Right &&
