@@ -189,8 +189,8 @@ void Board::handleInput() {
 
 void Board::Update() {
     handleInput();
-    ballMovement();
     breakout.tick(elapsed);
+    ballMovement();
     float timestep = 1.0f / 10;
     if (elapsed >= timestep) {
         elapsed -= timestep;
@@ -295,7 +295,7 @@ void Board::collision() {
 }
 
 int main(int argc, char const** argv) {
-    Window m_window("Hello World", sf::Vector2u(1200, 800));
+    Window m_window("Breakout", sf::Vector2u(1200, 800));
     Board world;
     while(!world.gameover() && !m_window.getCloseWindow()) {
         m_window.Update();
