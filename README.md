@@ -1,3 +1,4 @@
 # Breakout
-A simple game Breakout made by C++ and SFML framework.
+A simple Breakout game made by C++ and SFML framework.
+
 ![](breakout.gif)
